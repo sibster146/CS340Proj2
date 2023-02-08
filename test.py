@@ -12,7 +12,7 @@ def receive(s):
         data = s.recv()
         print("recv returned {%s}" % data.decode('utf-8'))
         str_buf += data.decode('utf-8')
-        print(f"this is string buffer: {str_buf}")
+        #print(f"this is string buffer: {str_buf}")
         for t in str_buf.split(" "):
             if len(t) == 0:
                 # there could be a "" at the start or the end, if a space is there

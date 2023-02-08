@@ -20,14 +20,18 @@ class Streamer:
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
         # Your code goes here!  The code below should be changed!
+        
         lenBytes = len(data_bytes)
         seqNum = 0
+        
         for i in range(0,lenBytes,1468):
             packet = struct.pack("!i1468s",seqNum, data_bytes[i:i+1468])
             self.socket.sendto(packet,(self.dst_ip, self.dst_port))
             seqNum+=1
+            
+            
             #self.socket.sendto(data_bytes[i:i+1472], (self.dst_ip, self.dst_port))
-        # for now I'm just sending the raw application-level data in one UDP payload
+            # for now I'm just sending the raw application-level data in one UDP payload
 
     def recv(self) -> bytes:
         """Blocks (waits) if no data is ready to be read from the connection."""
@@ -38,13 +42,11 @@ class Streamer:
         packet,addr = self.socket.recvfrom()
         data = struct.unpack("!i1468s", packet)
 
-        print(packet)
-        
-        #print(data[0])
-        data = data[1][1:]
-        # print(data)
+        print(f"Packet is {packet}")
+        print(f"Data is {data}")
 
-        return data
+        
+        return data[1]
 
 
         
