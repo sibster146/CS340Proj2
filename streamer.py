@@ -17,6 +17,7 @@ class Streamer:
         self.dst_port = dst_port
         self.buffer = {}
         self.ackNum = 0
+        self.seqNum = 0
 
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
@@ -25,16 +26,11 @@ class Streamer:
         # for i in range(0,lenBytes,1472):
         #     self.socket.sendto(data_bytes[i:i+1472], (self.dst_ip, self.dst_port))
 
-
-
-
-
-        seqNum = 0
         for i in range(0,lenBytes,1468):
-            packetHeader = struct.pack("!I",seqNum)
+            packetHeader = struct.pack("!I",self.seqNum)
             self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
             #time.sleep(1)
-            seqNum+=1
+            self.seqNum+=1
 
             # packet = struct.pack("!i4s",self.seqNum, data_bytes[i:i+4])
             # self.socket.sendto(packet,(self.dst_ip, self.dst_port))
