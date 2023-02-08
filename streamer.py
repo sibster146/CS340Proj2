@@ -22,46 +22,34 @@ class Streamer:
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
         # Your code goes here!  The code below should be changed!
+        
         lenBytes = len(data_bytes)
-        # for i in range(0,lenBytes,1472):
-        #     self.socket.sendto(data_bytes[i:i+1472], (self.dst_ip, self.dst_port))
-
+        
         for i in range(0,lenBytes,1468):
             packetHeader = struct.pack("!I",self.seqNum)
             self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
-            #time.sleep(1)
             self.seqNum+=1
-
-            # packet = struct.pack("!i4s",self.seqNum, data_bytes[i:i+4])
-            # self.socket.sendto(packet,(self.dst_ip, self.dst_port))
-            # time.sleep(1)
-            # self.seqNum+=1
-            #self.socket.sendto(data_bytes[i:i+1472], (self.dst_ip, self.dst_port))
-        # for now I'm just sending the raw application-level data in one UDP payload
-
 
     def recv(self) -> bytes:
         """Blocks (waits) if no data is ready to be read from the connection."""
         # your code goes here!  The code below should be changed!
         # this sample code just calls the recvfrom method on the LossySocket
 
-        # packet,addr = self.socket.recvfrom()
-        # print(f"this is the packet: {type(packet)}")
-        # return packet
-
-
+        #print(f"At this call of recv, we have recieved {len(self.buffer)} packets.")
 
         while 1:
-            packet,addr = self.socket.recvfrom()
-            num = struct.unpack('!I',packet[:4])[0]
-            data = packet[4:]
-            print(f"THis is acknum: {self.ackNum}")
-            print(f"this is the packet: {num},{data},{type(data)}")
-            self.buffer[num] = data
             if self.ackNum in self.buffer:
                 val = self.buffer[self.ackNum]
                 self.ackNum+=1
                 return val
+            else:
+                packet,addr = self.socket.recvfrom()
+                num = struct.unpack('!I',packet[:4])[0]
+                data = packet[4:]
+                #print(f"This is acknum: {self.ackNum}")
+                #print(f"This is the packet: {num},{data},{type(data)}")
+                self.buffer[num] = data
+                
 
 
 
