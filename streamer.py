@@ -40,6 +40,7 @@ class Streamer:
         while 1:
             if self.ackNum in self.buffer:
                 val = self.buffer[self.ackNum]
+                del self.buffer[self.ackNum]
                 self.ackNum+=1
                 return val
             else:
