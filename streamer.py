@@ -4,6 +4,8 @@ from lossy_socket import LossyUDP
 from socket import INADDR_ANY
 import struct
 import heapq
+import concurrent.futures
+import time
 
 
 class Streamer:
@@ -18,6 +20,10 @@ class Streamer:
         self.buffer = {}
         self.ackNum = 0
         self.seqNum = 0
+        self.closed = False
+        self.ack = False
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        executor.submit(self.listener)
 
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
@@ -26,9 +32,12 @@ class Streamer:
         lenBytes = len(data_bytes)
         
         for i in range(0,lenBytes,1468):
-            packetHeader = struct.pack("!I",self.seqNum)
+            packetHeader = struct.pack("!i",self.seqNum)
             self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
+            while not self.ack:
+                time.sleep(0.01)
             self.seqNum+=1
+
 
     def recv(self) -> bytes:
         """Blocks (waits) if no data is ready to be read from the connection."""
@@ -36,21 +45,43 @@ class Streamer:
         # this sample code just calls the recvfrom method on the LossySocket
 
         #print(f"At this call of recv, we have recieved {len(self.buffer)} packets.")
-
+        ackHeader = struct.pack("!i",-1)
         while 1:
             if self.ackNum in self.buffer:
                 val = self.buffer[self.ackNum]
                 del self.buffer[self.ackNum]
+                #self.socket.sendto(ackHeader + val, (self.dst_ip, self.dst_port) )
+
                 self.ackNum+=1
                 return val
+                """
             else:
                 packet,addr = self.socket.recvfrom()
-                num = struct.unpack('!I',packet[:4])[0]
+                num = struct.unpack('!i',packet[:4])[0]
                 data = packet[4:]
                 #print(f"This is acknum: {self.ackNum}")
                 #print(f"This is the packet: {num},{data},{type(data)}")
                 self.buffer[num] = data
+                """
                 
+    def listener(self):
+        ackHeader = struct.pack("!i",-1)
+        while not self.closed: # a later hint will explain self.closed
+            try:
+                packet, addr = self.socket.recvfrom()
+                num = struct.unpack('!i',packet[:4])[0]
+                if num==-1:
+                    self.ack = True
+                else:
+                    data = packet[4:]
+                    self.socket.sendto(ackHeader + data, (self.dst_ip, self.dst_port) )
+                    self.buffer[num] = data
+
+      # store the data in the receive buffer
+      # ...
+            except Exception as e:
+                print("listener died!")
+                print(e)
 
 
 
@@ -58,4 +89,6 @@ class Streamer:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
         # your code goes here, especially after you add ACKs and retransmissions.
+        self.closed = True
+        self.socket.stoprecv()
         pass
