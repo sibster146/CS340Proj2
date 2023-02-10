@@ -7,6 +7,10 @@ import heapq
 import concurrent.futures
 import time
 
+"""
+-1 = ACK
+-2 = FIN
+"""
 
 class Streamer:
     def __init__(self, dst_ip, dst_port,
@@ -38,8 +42,10 @@ class Streamer:
             start = time.perf_counter()
             while not self.ack:
                 if time.perf_counter()-start>=0.25 and not self.ack:
+                    self.ack = False
                     self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
                     start = time.perf_counter()
+                print(time.perf_counter()-start)
 
                 #time.sleep(0.01)
             self.seqNum+=1
@@ -84,12 +90,15 @@ class Streamer:
             try:
                 packet, addr = self.socket.recvfrom()
                 num = struct.unpack('!i',packet[:4])[0]
+                data = packet[4:]
+                
                 if num==-1:
+
                     self.ack = True
                 else:
                     data = packet[4:]
                     print(data)
-                    self.socket.sendto(ackHeader + data, (self.dst_ip, self.dst_port) )
+                    self.socket.sendto(ackHeader + data, (self.dst_ip, self.dst_port))
                     self.buffer[num] = data
 
       # store the data in the receive buffer
@@ -104,6 +113,13 @@ class Streamer:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
         # your code goes here, especially after you add ACKs and retransmissions.
+        # while not self.ack:
+        #     time.sleep(0.01)
+
+        # finHeader = struct.pack("!i",-2)
+        # self.socket.sendto( + data, (self.dst_ip, self.dst_port))
+
+
         self.closed = True
         self.socket.stoprecv()
         pass
