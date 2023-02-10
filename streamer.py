@@ -32,11 +32,25 @@ class Streamer:
         lenBytes = len(data_bytes)
         
         for i in range(0,lenBytes,1468):
+            self.ack = False
             packetHeader = struct.pack("!i",self.seqNum)
             self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
+            start = time.perf_counter()
             while not self.ack:
-                time.sleep(0.01)
+                if time.perf_counter()-start>=0.25 and not self.ack:
+                    self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
+                    start = time.perf_counter()
+
+                #time.sleep(0.01)
             self.seqNum+=1
+
+
+    """
+    THERE ARE TWO WAYS TO SEND ACKs
+    1. SEND THE ACKS in the RECV FUNCTION- tried this it didnt work too well
+    2. SEND THE ACKS IN THE LISTENER FUNCTION- trying this one now
+
+    """
 
 
     def recv(self) -> bytes:
@@ -74,6 +88,7 @@ class Streamer:
                     self.ack = True
                 else:
                     data = packet[4:]
+                    print(data)
                     self.socket.sendto(ackHeader + data, (self.dst_ip, self.dst_port) )
                     self.buffer[num] = data
 
