@@ -7,6 +7,8 @@ import heapq
 import concurrent.futures
 import threading
 import time
+import hashlib
+import sys
 
 """
 -1 = ACK
@@ -177,3 +179,52 @@ class Streamer:
         self.closed = True
         self.socket.stoprecv()
         pass
+
+
+    def add_hash(self, p: bytes) -> bytes: 
+        #This function should be called around the packet as it is being sent through the socket
+        #Packet should be inputted as a (max length - 16) byte long bytestream.
+        #Packet will be returned as a max length packet ready to be sent
+        #Total max sending size is 1472:
+        #   4 bytes packet header + 1468 packet data
+        #Now it will need to be:
+        #   16 bytes packet hash + 4 bytes packet header + 1452 bytes packet data
+
+
+        self.hash = hashlib.md5()
+        self.hash.update(p)
+
+        return_packet = self.hash.digest() + p
+
+        if len(return_packet) != 1472:
+            print("Something is wrong with the packet length, stopping")
+            sys.exit(-1)
+        
+        if len(self.hash.digest) != 16 or self.hash.digest_size != 16:
+            print("Something is wrong with the hash itself")
+            sys.exit(-1)
+
+        return return_packet
+
+    def hash_matches(self, p:bytes):
+        #this function should be called on a returned packet.
+        #Upon recieve, call this function!
+        #It will return None if the packet was corrupted, 
+        # or it will return the packet, of length 1456
+        self.hash = hashlib.md5()
+        self.hash.update(p[16:])
+
+        if self.hash.digest() != p[:16]:
+            return None
+        else:
+            return p[16:]
+
+
+        #Plan for part 4 implementation
+        # In the send portion, alter the packet's data portion to be shorter
+        # Then wrap the packet in the above hash_packet function
+        
+        # In the recv part, as soon as the packet is recieved and unpacket, call has_matches on it.
+        # new_p = hash_matches(recvd_packet), 
+        # if new_p == None: corruption occured, ask for resend
+        # else : use new_p as the packet going forward
