@@ -65,6 +65,7 @@ class Streamer:
             
 
             self.seqNum+=1
+        self.ack = False
 
 
 
@@ -105,21 +106,25 @@ class Streamer:
 
     def listener(self):
         ackHeader = struct.pack("!i",-1)
-        ack2Header = struct.pack("!i",-2)
         lastSeqNum = []
         while not self.closed: # a later hint will explain self.closed
             try:
                 packet, addr = self.socket.recvfrom()
                 num = struct.unpack('!i',packet[:4])[0]
-                data = packet[4:]
 
                 if num == -1:
                     self.ack = True
+                if num==-2:
+                    print("its getting here")
+                    self.ack = True
+                    #self.stop_listener()
+                    #return
 
 
 
 
                 elif num >= 0:
+                    data = packet[4:]
 
                     if (lastSeqNum and lastSeqNum[-1]!=num-1) and (num not in lastSeqNum):
                         continue
@@ -172,13 +177,25 @@ class Streamer:
         # while not self.ack:
         #     time.sleep(0.01)
 
-        # finHeader = struct.pack("!i",-2)
-        # self.socket.sendto( + data, (self.dst_ip, self.dst_port))
+        finHeader = struct.pack("!i",-2)
 
+        self.socket.sendto( finHeader, (self.dst_ip, self.dst_port))
+        start = time.perf_counter()
+        while not self.ack:
+            if time.perf_counter()-start>=.5 and not self.ack:
+                #self.ack = False
+                self.socket.sendto(finHeader, (self.dst_ip, self.dst_port))
+                start = time.perf_counter()
+                #time.sleep(0.01)
+
+        print("waiting two secs")
+        time.sleep(2)
 
         self.closed = True
         self.socket.stoprecv()
-        pass
+        self.stop_listener()
+        return
+
 
 
     def add_hash(self, p: bytes) -> bytes: 
