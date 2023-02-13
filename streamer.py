@@ -45,71 +45,103 @@ class Streamer:
             self.executor.shutdown()
 
     def send(self, data_bytes: bytes) -> None:
-        """Note that data_bytes can be larger than one packet."""
-        # Your code goes here!  The code below should be changed!
         
         lenBytes = len(data_bytes)
         
-        for i in range(0,lenBytes,1468):
-            self.ack = False
-            packetHeader = struct.pack("!i",self.seqNum)
-            self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
-            start = time.perf_counter()
-            while not self.ack:
-                if time.perf_counter()-start>=.5 and not self.ack:
-                    self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
-                    start = time.perf_counter()
+        bodyLength = 1452 # The length of the packet body
 
-            self.seqNum+=1
-        self.ack = False
+        for i in range(0,lenBytes,bodyLength): # Iterate through the data to be sent
+
+            self.ack = False # Reset Ack flag for this packet
+
+            packetHeader = struct.pack("!i", self.seqNum) # Encode packet sequence number as bytes
+
+            packet = self.add_hash(packetHeader + data_bytes[i:i+bodyLength]) # Concatenate packetHeader and data body, generate and attach checksum
+
+            print(f"Sending packet with contents: {packet}")
+
+            self.socket.sendto(packet, (self.dst_ip, self.dst_port)) # Send complete packet
+
+            start = time.perf_counter() # Start a timer
+
+            while not self.ack: # While we're waiting to receive an Ack packet
+
+                if time.perf_counter()-start>=.5 and not self.ack: # If it's been 0.5 seconds and we haven't recv'd an Ack packet
+
+                    #TODO Add hashing to ack packets
+                    
+                    self.socket.sendto(packet, (self.dst_ip, self.dst_port)) # Resend the last packet
+
+                    start = time.perf_counter() # Start timing again            
+
+            self.seqNum+=1 # This packet was successfully sent, prep to send next packet
 
 
 
+        self.ack = False # Reset Ack flag for this packet
 
-    """
-    THERE ARE TWO WAYS TO SEND ACKs
-    1. SEND THE ACKS in the RECV FUNCTION- tried this it didnt work too well
-    2. SEND THE ACKS IN THE LISTENER FUNCTION- trying this one now
-    """
+        finHeader = struct.pack("!i", -2) # Encode packet sequence number as bytes
+
+        finpacket = self.add_hash(finHeader + data_bytes[:bodyLength]) # Concatenate packetHeader and data body, generate and attach checksum
+
+        print(f"Sending packet with contents: {packet}")
+
+        self.socket.sendto(finpacket, (self.dst_ip, self.dst_port)) # Send complete packet
+
+        start = time.perf_counter() # Start a timer
+
+        while not self.ack: # While we're waiting to receive an Ack packet
+
+            if time.perf_counter()-start>=.5 and not self.ack: # If it's been 0.5 seconds and we haven't recv'd an Ack packet
+
+                #TODO Add hashing to ack packets
+                
+                self.socket.sendto(packet, (self.dst_ip, self.dst_port)) # Resend the last packet
+
+                start = time.perf_counter() # Start timing again            
+
 
 
     def recv(self) -> bytes:
-        """Blocks (waits) if no data is ready to be read from the connection."""
-        # your code goes here!  The code below should be changed!
-        # this sample code just calls the recvfrom method on the LossySocket
 
-        #print(f"At this call of recv, we have recieved {len(self.buffer)} packets.")
-        ackHeader = struct.pack("!i",-1)
+        ackHeader = struct.pack("!i", -1) # Encode Ack header as bytes
+
         while 1:
+
             if self.ackNum in self.buffer:
+
                 val = self.buffer[self.ackNum]
+
                 self.buffer[self.ackNum]
+
                 del self.buffer[self.ackNum]
+
                 self.ackNum+=1
+
+                #self.socket.sendto(ackHeader + val, (self.dst_ip, self.dst_port) )
                 return val
-                        
-            """
-            else:
-                packet,addr = self.socket.recvfrom()
-                num = struct.unpack('!i',packet[:4])[0]
-                data = packet[4:]
-                #print(f"This is acknum: {self.ackNum}")
-                #print(f"This is the packet: {num},{data},{type(data)}")
-                self.buffer[num] = data
-            """
 
 
     def listener(self):
-        ackHeader = struct.pack("!i",-1)
+
+        ackHeader = struct.pack("!i",-1) # Encode Ack header as bytes
+
         lastSeqNum = []
         while not self.closed: # a later hint will explain self.closed
             try:
-                packet, addr = self.socket.recvfrom()
+                packet, addr = self.socket.recvfrom() # Receive packet from socket
+
+                packet = self.hash_matches(packet) # Check received data against received checksum
+
+                if packet is None: # If the checksum doesn't match, drop and let the sender resend
+                    print("packet checksum didn't match, ignoring the corrupted packet")
+                    continue
+
                 num = struct.unpack('!i',packet[:4])[0]
 
                 if num == -1:
                     self.ack = True
-                if num==-2:
+                if num==-2 and len(self.buffer)==0:
                     print("its getting here")
                     self.ack = True
                     #self.stop_listener()
@@ -123,7 +155,8 @@ class Streamer:
 
                     lastSeqNum.append(num)
                     self.buffer[num] = data
-                    self.socket.sendto(ackHeader + data, (self.dst_ip, self.dst_port))
+                    packet = self.add_hash(ackHeader + data)
+                    self.socket.sendto(packet, (self.dst_ip, self.dst_port))
 
 
                   
@@ -134,19 +167,29 @@ class Streamer:
                 print(e)
 
 
+
+
     def close(self) -> None:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
-        finHeader = struct.pack("!i",-2)
+        # your code goes here, especially after you add ACKs and retransmissions.
 
-        self.socket.sendto( finHeader, (self.dst_ip, self.dst_port))
-        start = time.perf_counter()
+
         while not self.ack:
-            if time.perf_counter()-start>=.5 and not self.ack:
-                #self.ack = False
-                self.socket.sendto(finHeader, (self.dst_ip, self.dst_port))
-                start = time.perf_counter()
-                #time.sleep(0.01)
+            time.sleep(0.01)
+
+        print("closing")
+
+        # finHeader = self.add_hash(struct.pack("!i",-2))
+
+        # self.socket.sendto( finHeader, (self.dst_ip, self.dst_port))
+        # start = time.perf_counter()
+        # while not self.ack:
+        #     if time.perf_counter()-start>=.5 and not self.ack:
+        #         #self.ack = False
+        #         self.socket.sendto(finHeader, (self.dst_ip, self.dst_port))
+        #         start = time.perf_counter()
+        #         #time.sleep(0.01)
 
         print("waiting two secs")
         time.sleep(2)
@@ -154,6 +197,8 @@ class Streamer:
         self.closed = True
         self.socket.stoprecv()
         self.stop_listener()
+
+        print("EVERYTHING CLOSED")
         return
 
 
@@ -171,13 +216,19 @@ class Streamer:
         self.hash = hashlib.md5()
         self.hash.update(p)
 
+        print(f"Add_hash result digest is {self.hash.digest()} + {p}")
+
         return_packet = self.hash.digest() + p
 
-        if len(return_packet) != 1472:
+        print(f"Meaning return_packet is  {return_packet}")
+
+        if len(return_packet) < 16:
             print("Something is wrong with the packet length, stopping")
+            print(return_packet.decode())
+            print(len(return_packet))
             sys.exit(-1)
         
-        if len(self.hash.digest) != 16 or self.hash.digest_size != 16:
+        if self.hash.digest_size != 16:
             print("Something is wrong with the hash itself")
             sys.exit(-1)
 
@@ -185,15 +236,24 @@ class Streamer:
 
     def hash_matches(self, p:bytes):
         #this function should be called on a returned packet.
-        #Upon recieve, call this function!
+        #Upon receive, call this function!
         #It will return None if the packet was corrupted, 
         # or it will return the packet, of length 1456
         self.hash = hashlib.md5()
+
+        print(f"Checking match on packet {p}")
+
+
         self.hash.update(p[16:])
 
+        print(f"Calculated hash is {self.hash.digest()}")
+        print(f"Reference hash is: {p[:16]}")
+
         if self.hash.digest() != p[:16]:
+            print("Hash doesn't match")
             return None
         else:
+            print("Hash matches")
             return p[16:]
 
 
@@ -201,7 +261,7 @@ class Streamer:
         # In the send portion, alter the packet's data portion to be shorter
         # Then wrap the packet in the above hash_packet function
         
-        # In the recv part, as soon as the packet is recieved and unpacket, call has_matches on it.
+        # In the recv part, as soon as the packet is received and unpacket, call has_matches on it.
         # new_p = hash_matches(recvd_packet), 
         # if new_p == None: corruption occured, ask for resend
         # else : use new_p as the packet going forward
