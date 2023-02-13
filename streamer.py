@@ -51,18 +51,14 @@ class Streamer:
         lenBytes = len(data_bytes)
         
         for i in range(0,lenBytes,1468):
-
             self.ack = False
             packetHeader = struct.pack("!i",self.seqNum)
             self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
             start = time.perf_counter()
             while not self.ack:
                 if time.perf_counter()-start>=.5 and not self.ack:
-                    #self.ack = False
                     self.socket.sendto(packetHeader + data_bytes[i:i+1468], (self.dst_ip, self.dst_port))
                     start = time.perf_counter()
-                    #time.sleep(0.01)
-            
 
             self.seqNum+=1
         self.ack = False
@@ -90,7 +86,6 @@ class Streamer:
                 self.buffer[self.ackNum]
                 del self.buffer[self.ackNum]
                 self.ackNum+=1
-                #self.socket.sendto(ackHeader + val, (self.dst_ip, self.dst_port) )
                 return val
                         
             """
@@ -120,9 +115,6 @@ class Streamer:
                     #self.stop_listener()
                     #return
 
-
-
-
                 elif num >= 0:
                     data = packet[4:]
 
@@ -142,41 +134,9 @@ class Streamer:
                 print(e)
 
 
-    """"         
-    def listener(self):
-        ackHeader = struct.pack("!i",-1)
-
-        while not self.closed:
-            try:
-                packet, addr = self.socket.recvfrom()
-                num = struct.unpack("!i",packet[:4])
-                if num==-1:
-                    check = struct.unpack('!i',packet[4:])
-                    if check == self.ackNum:
-                        self.ack = True
-                        self.ackNum+=1
-                else:
-                    data = packet[4:]
-                    self.buffer[num] = data
-                    ackNumCheck = struct.pack("!i", self.ackNum)
-                    self.socket.sendto(ackHeader + ackNumCheck, (self.dst_ip, self.dst_port))
-
-
-      # store the data in the receive buffer
-      # ...
-            except Exception as e:
-                print("listener died!")
-                print(e)
- """
-
-
     def close(self) -> None:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
-        # your code goes here, especially after you add ACKs and retransmissions.
-        # while not self.ack:
-        #     time.sleep(0.01)
-
         finHeader = struct.pack("!i",-2)
 
         self.socket.sendto( finHeader, (self.dst_ip, self.dst_port))
