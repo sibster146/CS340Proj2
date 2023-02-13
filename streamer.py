@@ -125,7 +125,6 @@ class Streamer:
                     #self.stop_listener()
                     #return
 
-
                 elif num >= 0:
                     data = packet[4:]
 
