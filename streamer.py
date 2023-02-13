@@ -76,29 +76,7 @@ class Streamer:
 
             self.seqNum+=1 # This packet was successfully sent, prep to send next packet
 
-
-
-        self.ack = False # Reset Ack flag for this packet
-
-        finHeader = struct.pack("!i", -2) # Encode packet sequence number as bytes
-
-        finpacket = self.add_hash(finHeader + data_bytes[:bodyLength]) # Concatenate packetHeader and data body, generate and attach checksum
-
-        print(f"Sending packet with contents: {packet}")
-
-        self.socket.sendto(finpacket, (self.dst_ip, self.dst_port)) # Send complete packet
-
-        start = time.perf_counter() # Start a timer
-
-        while not self.ack: # While we're waiting to receive an Ack packet
-
-            if time.perf_counter()-start>=.5 and not self.ack: # If it's been 0.5 seconds and we haven't recv'd an Ack packet
-
-                #TODO Add hashing to ack packets
-                
-                self.socket.sendto(packet, (self.dst_ip, self.dst_port)) # Resend the last packet
-
-                start = time.perf_counter() # Start timing again            
+        self.ack = False # Reset Ack flag to false for next iteration
 
 
 
@@ -173,7 +151,12 @@ class Streamer:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
         # your code goes here, especially after you add ACKs and retransmissions.
+        # while not self.ack:
+        #     time.sleep(0.01)
 
+        print("closing")
+
+        finHeader = self.add_hash(struct.pack("!i",-2))
 
         while not self.ack:
             time.sleep(0.01)
