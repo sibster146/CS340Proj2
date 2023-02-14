@@ -119,11 +119,14 @@ class Streamer:
 
                 if num == -1:
                     self.ack = True
+
                 if num==-2:
-                    print("its getting here")
-                    self.ack = True
-                    #self.stop_listener()
-                    #return
+                    print("Received FIN packet")
+
+                    # Send a FIN ACK
+                    ack = self.add_hash(ackHeader)
+                    self.socket.sendto(ack, (self.dst_ip, self.dst_port))
+
 
                 elif num >= 0:
                     data = packet[4:]
@@ -136,8 +139,6 @@ class Streamer:
                     packet = self.add_hash(ackHeader + data)
                     self.socket.sendto(packet, (self.dst_ip, self.dst_port))
 
-
-                  
 
       # store the data in the receive buffer
             except Exception as e:
@@ -156,18 +157,23 @@ class Streamer:
 
         print("closing")
 
-        finHeader = self.add_hash(struct.pack("!i",-2))
+        # wait for all acked
 
-        self.socket.sendto( finHeader, (self.dst_ip, self.dst_port))
-        start = time.perf_counter()
-        while not self.ack:
+        fin = self.add_hash(struct.pack("!i",-2)) # make fin packet
+
+        self.socket.sendto(fin, (self.dst_ip, self.dst_port)) # send fin packet
+
+        start = time.perf_counter() # start timer
+
+        while not self.ack: # while waiting for the fin ack
+
             if time.perf_counter()-start>=.5 and not self.ack:
-                #self.ack = False
-                self.socket.sendto(finHeader, (self.dst_ip, self.dst_port))
-                start = time.perf_counter()
-                #time.sleep(0.01)
 
-        print("waiting two secs")
+                self.socket.sendto(fin, (self.dst_ip, self.dst_port))
+                start = time.perf_counter()
+                
+        print("fin acked")
+        print("waiting two secs") # give the other time to close themselves (and stay open to respond to them)
         time.sleep(2)
 
         self.closed = True
