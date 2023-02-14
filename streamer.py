@@ -27,9 +27,11 @@ class Streamer:
         self.dst_ip = dst_ip
         self.dst_port = dst_port
         self.buffer = {}
-        self.ackNum = 0
-        self.seqNum = 0
+        self.ackNum = 5
+        self.seqNum = 5
         self.closed = False
+        self.batchAcks = 0
+        self.allhere = False
 
         self.ack = False
         self.future = None
@@ -44,7 +46,7 @@ class Streamer:
             self.future.cancel()
             self.executor.shutdown()
 
-    def send(self, data_bytes: bytes) -> None:
+    def serial_send(self, data_bytes: bytes) -> None:
         
         lenBytes = len(data_bytes)
         
@@ -80,27 +82,7 @@ class Streamer:
 
 
 
-    def recv(self) -> bytes:
-
-        ackHeader = struct.pack("!i", -1) # Encode Ack header as bytes
-
-        while 1:
-
-            if self.ackNum in self.buffer:
-
-                val = self.buffer[self.ackNum]
-
-                self.buffer[self.ackNum]
-
-                del self.buffer[self.ackNum]
-
-                self.ackNum+=1
-
-                #self.socket.sendto(ackHeader + val, (self.dst_ip, self.dst_port) )
-                return val
-
-
-    def listener(self):
+    def serial_listener(self):
 
         ackHeader = struct.pack("!i",-1) # Encode Ack header as bytes
 
@@ -148,6 +130,186 @@ class Streamer:
 
 
 
+
+
+
+
+    
+
+
+    def ssend(self, data_bytes: bytes, sequence) -> None:
+
+        print(f"sending sequence {sequence}")
+        
+        packetHeader = struct.pack("!i", sequence) # Encode packet sequence number as bytes
+
+        packet = self.add_hash(packetHeader + data_bytes) # Concatenate packetHeader and data body, generate and attach checksum
+
+        self.socket.sendto(packet, (self.dst_ip, self.dst_port)) # Send complete packet
+
+
+    def send(self, data_bytes: bytes) -> None:
+
+        #start a pool of threads
+
+        len_bytes = len(data_bytes)
+
+        bodyLength = 1452
+
+        # for loop
+        for i in range(0, len_bytes, bodyLength * 5):
+
+            self.batchAcks = 0
+
+            threads = []
+
+            for j in range(i, (i + (bodyLength * 5)), bodyLength):
+                
+                t = threading.Thread(target = self.ssend, args = (data_bytes[j:j+bodyLength], j+5))
+                t.start()
+                threads.append(t)
+
+            start = time.perf_counter() # Start a timer
+
+            for t in threads:
+                t.join()
+
+
+            # wait for all 5 acks
+            #if not recvd, decrement i again
+            #send all 5 again
+            
+
+            while self.batchAcks != 5: # While we're waiting to receive an Ack packet
+
+                if time.perf_counter()-start>=.5 and self.batchAcks != 5: # If it's been 0.5 seconds and we haven't recv'd an Ack packet
+
+                    i -= (bodyLength * 5)
+
+                    break  
+
+
+
+
+        
+         
+            
+
+        # have each thread send a chuck of the data
+
+        # check all the acks we got, and loop to the top from the lowest
+
+    def listener(self):
+
+        
+
+        lastSeqNum = []
+
+
+        while not self.closed: # a later hint will explain self.closed
+            try:
+                packet, addr = self.socket.recvfrom() # Receive packet from socket
+
+                packet = self.hash_matches(packet) # Check received data against received checksum
+
+                if packet is None: # If the checksum doesn't match, drop and let the sender resend
+                    print("packet checksum didn't match, ignoring the corrupted packet")
+                    continue
+
+                num = struct.unpack('!i',packet[:4])[0]
+
+                if num == -1:
+                    self.ack = True
+
+
+                if num==-2:
+                    print("Received FIN packet")
+
+                    # Send a FIN ACK
+                    ack = self.add_hash(struct.pack("!i",-1))
+                    self.socket.sendto(ack, (self.dst_ip, self.dst_port))
+
+
+                elif num >= 0:
+                    data = packet[4:]
+                    print(f"THIS IS NUM: {num}")
+
+                    if num not in self.buffer:
+                        self.buffer[num] = data
+
+                        print(f"THIS IS THE BUFFER: {self.buffer}")
+                        
+
+                        #all ack numbers are the sequence number *-1 
+                        ackHeader = self.add_hash(struct.pack("!i", -1 * num))
+                        self.socket.sendto(ackHeader, (self.dst_ip, self.dst_port))
+
+
+                        if len(self.buffer) == 5:
+                            print("BUFFER FULL")
+                            self.ackNum = 5
+                            self.allhere = True
+                         
+                            while len(self.buffer) != 0: pass
+                            self.allhere = False
+                            self.ackNum = 5
+
+                elif num < 0:
+                    self.batchAcks += 1
+
+
+
+
+
+                    # if (lastSeqNum and lastSeqNum[-1]!=num-1) and (num not in lastSeqNum):
+                    #     continue
+
+                    # lastSeqNum.append(num)
+                    # self.buffer[num] = data
+                    # packet = self.add_hash(ackHeader + data)
+                    # self.socket.sendto(packet, (self.dst_ip, self.dst_port))
+
+
+      # store the data in the receive buffer
+            except Exception as e:
+                print("listener died!")
+                print(e)
+
+
+    def recv(self) -> bytes:
+
+        ackHeader = struct.pack("!i", -1) # Encode Ack header as bytes
+        stack = []
+        latest = None 
+
+
+        while 1:
+
+            if self.allhere and self.buffer and self.ackNum < 7265:
+
+                val = self.buffer[self.ackNum]
+
+                del self.buffer[self.ackNum]
+                print(f"LOOP BUFFER: {self.buffer}")
+
+                self.ackNum+=1452
+
+                if not val:
+                    continue
+
+                if not latest
+
+
+
+                #self.socket.sendto(ackHeader + val, (self.dst_ip, self.dst_port) )
+                return val
+            
+
+
+    
+
+
+
     def close(self) -> None:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
@@ -171,7 +333,7 @@ class Streamer:
 
                 self.socket.sendto(fin, (self.dst_ip, self.dst_port))
                 start = time.perf_counter()
-                
+
         print("fin acked")
         print("waiting two secs") # give the other time to close themselves (and stay open to respond to them)
         time.sleep(2)
