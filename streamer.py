@@ -44,6 +44,13 @@ class Streamer:
             self.future.cancel()
             self.executor.shutdown()
 
+
+    def selective_send(self, data_bytes):
+        
+        
+        
+        pass
+
     def send(self, data_bytes: bytes) -> None:
         
         lenBytes = len(data_bytes)
