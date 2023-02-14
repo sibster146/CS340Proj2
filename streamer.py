@@ -44,13 +44,6 @@ class Streamer:
             self.future.cancel()
             self.executor.shutdown()
 
-
-    def selective_send(self, data_bytes):
-        
-        
-        
-        pass
-
     def send(self, data_bytes: bytes) -> None:
         
         lenBytes = len(data_bytes)
@@ -65,7 +58,7 @@ class Streamer:
 
             packet = self.add_hash(packetHeader + data_bytes[i:i+bodyLength]) # Concatenate packetHeader and data body, generate and attach checksum
 
-            print(f"Sending packet with contents: {packet}")
+            ##print(f"Sending packet with contents: {packet}")
 
             self.socket.sendto(packet, (self.dst_ip, self.dst_port)) # Send complete packet
 
@@ -119,7 +112,7 @@ class Streamer:
                 packet = self.hash_matches(packet) # Check received data against received checksum
 
                 if packet is None: # If the checksum doesn't match, drop and let the sender resend
-                    print("packet checksum didn't match, ignoring the corrupted packet")
+                    #print("packet checksum didn't match, ignoring the corrupted packet")
                     continue
 
                 num = struct.unpack('!i',packet[:4])[0]
@@ -128,7 +121,7 @@ class Streamer:
                     self.ack = True
 
                 if num==-2:
-                    print("Received FIN packet")
+                    #print("Received FIN packet")
 
                     # Send a FIN ACK
                     ack = self.add_hash(ackHeader)
@@ -162,7 +155,7 @@ class Streamer:
         # while not self.ack:
         #     time.sleep(0.01)
 
-        print("closing")
+        #print("closing")
 
         # wait for all acked
 
@@ -179,8 +172,8 @@ class Streamer:
                 self.socket.sendto(fin, (self.dst_ip, self.dst_port))
                 start = time.perf_counter()
                 
-        print("fin acked")
-        print("waiting two secs") # give the other time to close themselves (and stay open to respond to them)
+        #print("fin acked")
+        #print("waiting two secs") # give the other time to close themselves (and stay open to respond to them)
         time.sleep(2)
 
         self.closed = True
@@ -203,20 +196,20 @@ class Streamer:
         self.hash = hashlib.md5()
         self.hash.update(p)
 
-        print(f"Add_hash result digest is {self.hash.digest()} + {p}")
+        #print(f"Add_hash result digest is {self.hash.digest()} + {p}")
 
         return_packet = self.hash.digest() + p
 
-        print(f"Meaning return_packet is  {return_packet}")
+        #print(f"Meaning return_packet is  {return_packet}")
 
         if len(return_packet) < 16:
-            print("Something is wrong with the packet length, stopping")
-            print(return_packet.decode())
-            print(len(return_packet))
+            #print("Something is wrong with the packet length, stopping")
+            #print(return_packet.decode())
+            #print(len(return_packet))
             sys.exit(-1)
         
         if self.hash.digest_size != 16:
-            print("Something is wrong with the hash itself")
+            #print("Something is wrong with the hash itself")
             sys.exit(-1)
 
         return return_packet
@@ -228,19 +221,19 @@ class Streamer:
         # or it will return the packet, of length 1456
         self.hash = hashlib.md5()
 
-        print(f"Checking match on packet {p}")
+        #print(f"Checking match on packet {p}")
 
 
         self.hash.update(p[16:])
 
-        print(f"Calculated hash is {self.hash.digest()}")
-        print(f"Reference hash is: {p[:16]}")
+        #print(f"Calculated hash is {self.hash.digest()}")
+        #print(f"Reference hash is: {p[:16]}")
 
         if self.hash.digest() != p[:16]:
-            print("Hash doesn't match")
+            #print("Hash doesn't match")
             return None
         else:
-            print("Hash matches")
+            #print("Hash matches")
             return p[16:]
 
 
